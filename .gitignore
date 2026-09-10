@@ -1,0 +1,21 @@
+# Build artifact directory (JUCE, CMake, Visual Studio)
+build/
+bin/
+
+# Visual Studio / IDE temporary files
+.vs/
+*.user
+*.suo
+*.VC.db
+*.sln.docstates
+
+# JUCE generated temporary files
+juceaide/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Sub-repositories / temporary folders
+Atafuta-Vocal-Leveler/
