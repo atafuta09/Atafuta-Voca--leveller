@@ -1,6 +1,6 @@
 # AutoLeveler (Atafuta Vocal Leveler)
 
-JUCE / C++ で開発された、ボーカル特化型のオートレベラー VST3 / Standalone プラグインです。
+JUCE / C++ で開発された、ボーカル特化型のオートレベラー VST3 プラグインです。
 （リファレンス: iZotope Nectar 4 Auto Level）
 
 ## 主な機能
@@ -23,4 +23,5 @@ JUCE / C++ で開発された、ボーカル特化型のオートレベラー VS
 - **言語**: C++20
 - **フレームワーク**: JUCE 8 (CMake FetchContent)
 - **ビルドツール**: CMake 3.22+, Visual Studio 2022/2026 (MSVC)
-- **プラグイン形式**: VST3, Standalone
+- **プラグイン形式**: VST3
+

@@ -34,14 +34,13 @@ if(NOT TARGET juce::juce_core)
 endif()
 
 # ==============================================================================
-# プラグインターゲットの定義
-# VST3 および 単体起動できる Standalone アプリケーションを生成
+# プラグインターゲットの定義 (VST3)
 # ==============================================================================
 juce_add_plugin(AutoLeveler
     COMPANY_NAME "AtafutaAudio"
     PLUGIN_MANUFACTURER_CODE Ataf
     PLUGIN_CODE AtLv
-    FORMATS VST3 Standalone
+    FORMATS VST3
     PRODUCT_NAME "AutoLeveler"
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE
