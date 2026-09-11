@@ -26,6 +26,7 @@ namespace ParameterIDs
     inline constexpr auto syncSpeed       = "sync_speed";
     inline constexpr auto meterMode       = "meter_mode";
     inline constexpr auto guiEnable       = "gui_enable";
+    inline constexpr auto bypass          = "bypass";
 }
 
 /**
@@ -49,6 +50,25 @@ struct TimingInfo
     juce::String attackLabel = "30 ms";
     juce::String releaseLabel = "200 ms";
     juce::String modeName = "Free";
+};
+
+/**
+ * ファクトリープリセット情報
+ */
+struct Preset
+{
+    juce::String name;
+    float inGain = 0.0f;
+    float targetLevel = -12.0f;
+    float range = 6.0f;
+    float speed = 50.0f;
+    float outGain = 0.0f;
+    bool  lookahead = true;
+    bool  breathFilter = false;
+    bool  sibilanceFilter = false;
+    int   detectionMode = 0; // 0: RMS, 1: Peak
+    int   timingMode = 0;    // 0: Free, 1: Sync
+    int   syncSpeed = 1;     // 0: Fast, 1: Mid, 2: Slow
 };
 
 class AutoLevelerAudioProcessor : public juce::AudioProcessor
@@ -100,6 +120,14 @@ public:
 
     // ホストBPMの取得
     float getCurrentBpm() const noexcept { return currentBpm.load (std::memory_order_relaxed); }
+
+    // プリセットリスト取得
+    const std::vector<Preset>& getPresets() const noexcept { return presets; }
+
+    // ユーザープリセット管理
+    bool saveUserPreset (const juce::String& presetName);
+    void loadUserPresets();
+    void saveUserPresetsToFile();
 
     // Speed値、Timingモード (Free / BPM Sync)、SyncSpeed (Fast:0, Mid:1, Slow:2) からAttack/Release時定数を計算
     static inline TimingInfo calculateTiming (float speedVal, bool isSyncMode, int syncSpeedIndex, float hostBpm) noexcept
@@ -173,6 +201,11 @@ private:
     std::atomic<float>* syncSpeedParam       = nullptr;
     std::atomic<float>* meterModeParam       = nullptr;
     std::atomic<float>* guiEnableParam       = nullptr;
+    std::atomic<float>* bypassParam          = nullptr;
+
+    // プリセット管理
+    std::vector<Preset> presets;
+    int currentProgram = 0;
 
     // スムージング用
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> smoothedInputGainDb;

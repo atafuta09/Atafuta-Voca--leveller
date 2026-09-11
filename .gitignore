@@ -1,5 +1,6 @@
 # Build artifact directory (JUCE, CMake, Visual Studio)
 build/
+build_ninja/
 bin/
 
 # Visual Studio / IDE temporary files

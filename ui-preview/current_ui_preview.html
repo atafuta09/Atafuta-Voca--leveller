@@ -1,0 +1,1200 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Atafuta Vocal Leveler - JUCE Exact UI Preview</title>
+  <style>
+    /* JUCEデフォルト描画をピクセルパーフェクトに模倣 */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    body {
+      background: #090a0f;
+      color: #e2e8f0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .meta-bar {
+      margin-bottom: 12px;
+      font-size: 13px;
+      color: #94a3b8;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .badge-exact {
+      background: #1e293b;
+      color: #38bdf8;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+      font-size: 11px;
+    }
+
+    /* 880 x 520 ウィンドウ (JUCE AutoLevelerAudioProcessorEditor setSize(880, 520)) */
+    #juce-window {
+      width: 880px;
+      height: 520px;
+      background-color: rgb(15, 17, 23); /* 0x0f, 0x11, 0x17 */
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.8), 0 0 0 1px #262b3a;
+    }
+
+    /* 1. ヘッダーバー (height: 46px) */
+    .header-bar {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 880px;
+      height: 46px;
+      background-color: rgb(23, 26, 35); /* 0x17, 0x1a, 0x23 */
+      border-bottom: 1px solid rgb(38, 43, 58); /* 0x26, 0x2b, 0x3a */
+    }
+
+    .title-text {
+      position: absolute;
+      left: 18px;
+      top: 0;
+      width: 150px;
+      height: 46px;
+      line-height: 46px;
+      font-size: 17px;
+      font-weight: bold;
+      color: rgb(248, 250, 252); /* 0xf8, 0xfa, 0xfc */
+    }
+
+    .subtitle-text {
+      position: absolute;
+      left: 145px;
+      top: 0;
+      width: 160px;
+      height: 46px;
+      line-height: 46px;
+      font-size: 12px;
+      color: rgb(100, 116, 139); /* 0x64, 0x74, 0x8b */
+    }
+
+    /* JUCE ToggleButton (チェックボックス風) */
+    .juce-toggle {
+      position: absolute;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: rgb(226, 232, 240);
+      cursor: pointer;
+    }
+
+    .juce-toggle-box {
+      width: 14px;
+      height: 14px;
+      background: rgb(20, 24, 33);
+      border: 1px solid rgb(71, 85, 105);
+      border-radius: 2px;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .juce-toggle.active .juce-toggle-box {
+      border-color: currentColor;
+    }
+
+    .juce-toggle.active .juce-toggle-tick {
+      width: 6px;
+      height: 6px;
+      background-color: currentColor;
+    }
+
+    /* トグル位置 (JUCE resized: headerArea.removeFromRight (...).reduced(4,9)) */
+    /* ヘッダー右端からの配置:
+       GUI Display: right: 105 reduced(4,9) -> left: 775+4=779, top: 9, width: 97, height: 28
+       Sibilance Filter: right: 120 -> left: 655+4=659, top: 9, width: 112, height: 28
+       Breath Filter: right: 110 -> left: 545+4=549, top: 9, width: 102, height: 28
+       Lookahead: right: 135 -> left: 410+4=414, top: 9, width: 127, height: 28
+    */
+    #toggle-gui {
+      left: 779px; top: 9px; width: 97px; height: 28px;
+      color: rgb(16, 185, 129); /* 0x10, 0xb9, 0x81 */
+    }
+    #toggle-sibilance {
+      left: 659px; top: 9px; width: 112px; height: 28px;
+      color: rgb(167, 139, 250); /* 0xa7, 0x8b, 0xfa */
+    }
+    #toggle-breath {
+      left: 549px; top: 9px; width: 102px; height: 28px;
+      color: rgb(52, 211, 153); /* 0x34, 0xd3, 0x99 */
+    }
+    #toggle-lookahead {
+      left: 414px; top: 9px; width: 127px; height: 28px;
+      color: rgb(56, 189, 248); /* 0x38, 0xbd, 0xf8 */
+    }
+
+    /* 2. メインビジュアルエリア (Top: 46+6=52, Left: 16, Right: 880-16=864, Bottom: 520-165-6=349, Height: 297) */
+    /* meterColumn: 右端 54px (Left: 810 to 864)
+       meterModeBox: top 52, height 22 reduced(2,1) -> left: 812, top: 53, width: 50, height: 20
+       slimMeter: top 52+22+4=78, height 297-26=271 -> left: 810, top: 78, width: 54, height: 271
+       waveform: left 16, top 52, width: 864-16-54-6 = 788, height: 297
+    */
+
+    /* 波形Canvas */
+    #waveform-component {
+      position: absolute;
+      left: 16px;
+      top: 52px;
+      width: 788px;
+      height: 297px;
+    }
+
+    /* スリムメーター */
+    #slim-meter-component {
+      position: absolute;
+      left: 810px;
+      top: 78px;
+      width: 54px;
+      height: 271px;
+    }
+
+    /* JUCE ComboBox スタイル (meterModeBox & 下部モードセレクター) */
+    .juce-combobox {
+      background: rgb(26, 32, 44);
+      color: rgb(203, 213, 225);
+      border: 1px solid rgb(51, 65, 85);
+      border-radius: 2px;
+      font-size: 11px;
+      outline: none;
+      cursor: pointer;
+      padding: 1px 4px;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2394a3b8'%3e%3cpath d='M7 10l5 5 5-5z'/%3e%3c/svg%3e");
+      background-repeat: no-repeat;
+      background-position: right 2px center;
+      background-size: 14px;
+    }
+
+    #meter-mode-box {
+      position: absolute;
+      left: 812px;
+      top: 53px;
+      width: 50px;
+      height: 20px;
+      font-size: 10px;
+    }
+
+    /* 3. 下部コントロールパネル (controlArea: bounds.removeFromBottom(165).reduced(16, 6))
+       Top: 520 - 165 + 6 = 361px, Left: 16px, Width: 880 - 32 = 848px, Height: 165 - 12 = 153px
+       totalWidth = 848
+       faderW = 848 * 0.16 = 135px (reduced(6,0) -> 123px)
+       knobW  = 848 * 0.19 = 161px (reduced(8,0) or reduced(6,0))
+       modeW  = 848 * 0.15 = 127px (reduced(4,2) -> 119px)
+    */
+
+    .juce-label {
+      font-size: 12px;
+      font-weight: bold;
+      color: rgb(148, 163, 184); /* 0x94, 0xa3, 0xb8 */
+      text-align: center;
+      height: 18px;
+      line-height: 18px;
+    }
+
+    /* Column 1: INPUT Fader (Left: 16+6=22, Width: 123, Top: 361, Height: 153) */
+    #col-input {
+      position: absolute;
+      left: 22px;
+      top: 361px;
+      width: 123px;
+      height: 153px;
+    }
+
+    /* Column 2: TARGET Fader (Left: 16+135+6=157, Width: 123, Top: 361, Height: 153) */
+    #col-target {
+      position: absolute;
+      left: 157px;
+      top: 361px;
+      width: 123px;
+      height: 153px;
+    }
+
+    /* Column 3: RANGE Knob (Left: 16+270+8=294, Width: 145, Top: 361, Height: 153) */
+    #col-range {
+      position: absolute;
+      left: 294px;
+      top: 361px;
+      width: 145px;
+      height: 153px;
+    }
+
+    /* Column 4: SPEED Knob (Left: 16+431+6=453, Width: 149, Top: 361, Height: 153) */
+    #col-speed {
+      position: absolute;
+      left: 453px;
+      top: 361px;
+      width: 149px;
+      height: 153px;
+    }
+
+    /* Column 5: MODES (Left: 16+592+4=612, Width: 119, Top: 363, Height: 149) */
+    #col-mode {
+      position: absolute;
+      left: 612px;
+      top: 363px;
+      width: 119px;
+      height: 149px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    /* Column 6: OUTPUT Fader (Left: 16+719+6=741, Width: 117, Top: 361, Height: 153) */
+    #col-output {
+      position: absolute;
+      left: 741px;
+      top: 361px;
+      width: 117px;
+      height: 153px;
+    }
+
+    /* JUCE LinearVertical スライダーの完全再現 */
+    .juce-fader-container {
+      position: absolute;
+      top: 18px;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .juce-fader-track-wrap {
+      flex: 1;
+      width: 100%;
+      position: relative;
+      cursor: pointer;
+    }
+
+    /* JUCE標準のグルーブトラック */
+    .juce-fader-groove {
+      position: absolute;
+      left: 50%;
+      top: 6px;
+      bottom: 6px;
+      width: 4px;
+      transform: translateX(-50%);
+      background-color: rgb(30, 41, 59); /* trackColourId 0x1e, 0x29, 0x3b */
+      border-radius: 2px;
+    }
+
+    /* JUCE 標準サム (LinearVertical) */
+    .juce-fader-thumb {
+      position: absolute;
+      left: 50%;
+      width: 24px;
+      height: 12px;
+      transform: translate(-50%, 50%);
+      border-radius: 2px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.6);
+      cursor: ns-resize;
+    }
+    .juce-fader-thumb::after {
+      content: "";
+      position: absolute;
+      top: 5px;
+      left: 3px;
+      right: 3px;
+      height: 2px;
+      background: rgba(255, 255, 255, 0.4);
+    }
+
+    /* JUCE TextBoxBelow: 幅55px, 高さ18px, transparentBlack, text 0xe2, 0xe8, 0xf0 */
+    .juce-textbox {
+      width: 55px;
+      height: 18px;
+      line-height: 18px;
+      background: transparent;
+      border: none;
+      color: rgb(226, 232, 240);
+      font-size: 11px;
+      text-align: center;
+      font-family: inherit;
+    }
+
+    /* JUCE RotaryVerticalDrag スライダーの完全再現 */
+    .juce-knob-container {
+      position: absolute;
+      top: 18px;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .juce-knob-interactive {
+      width: 74px;
+      height: 74px;
+      position: relative;
+      cursor: ns-resize;
+    }
+
+    .juce-knob-interactive svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    .attack-release-badge {
+      font-size: 10px;
+      color: rgb(16, 185, 129); /* 0x10, 0xb9, 0x81 */
+      text-align: center;
+      height: 18px;
+      line-height: 18px;
+      white-space: nowrap;
+    }
+
+    /* モードセレクターの行 */
+    .mode-sub-group {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+    .mode-sub-label {
+      font-size: 10px;
+      font-weight: bold;
+      color: rgb(148, 163, 184);
+      height: 15px;
+      line-height: 15px;
+    }
+    .mode-sub-box {
+      width: 100%;
+      height: 22px;
+    }
+
+    /* 説明 */
+    .guide-text {
+      margin-top: 14px;
+      font-size: 12px;
+      color: #64748b;
+      max-width: 880px;
+      text-align: center;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="meta-bar">
+    <span>JUCE C++ 実装 1:1 ピクセル完全同期プレビュー (880 × 520 px)</span>
+    <span class="badge-exact">WaveformVisualizer & SlimMeter 描画ロジック一致</span>
+  </div>
+
+  <div id="juce-window">
+    <!-- 1. Header (paint: 0x17, 0x1a, 0x23, line: 0x26, 0x2b, 0x3a) -->
+    <div class="header-bar">
+      <div class="title-text">AUTO LEVELER</div>
+      <div class="subtitle-text">Vocal Dynamics Rider</div>
+
+      <!-- Header Toggles (Lookahead, Breath, Sibilance, GUI Display) -->
+      <div class="juce-toggle active" id="toggle-lookahead">
+        <div class="juce-toggle-box"><div class="juce-toggle-tick"></div></div>
+        <span>Lookahead (5ms)</span>
+      </div>
+
+      <div class="juce-toggle active" id="toggle-breath">
+        <div class="juce-toggle-box"><div class="juce-toggle-tick"></div></div>
+        <span>Breath Filter</span>
+      </div>
+
+      <div class="juce-toggle active" id="toggle-sibilance">
+        <div class="juce-toggle-box"><div class="juce-toggle-tick"></div></div>
+        <span>Sibilance Filter</span>
+      </div>
+
+      <div class="juce-toggle active" id="toggle-gui">
+        <div class="juce-toggle-box"><div class="juce-toggle-tick"></div></div>
+        <span>GUI Display</span>
+      </div>
+    </div>
+
+    <!-- 2. Waveform Visualizer Canvas (788 x 297 px) -->
+    <canvas id="waveform-component" width="788" height="297"></canvas>
+
+    <!-- 3. Meter Mode Box & Slim Meter (54 x 271 px) -->
+    <select class="juce-combobox" id="meter-mode-box">
+      <option value="0" selected>Peak</option>
+      <option value="1">RMS</option>
+      <option value="2">VU</option>
+    </select>
+    <canvas id="slim-meter-component" width="54" height="271"></canvas>
+
+    <!-- 4. Lower Controls (165px area) -->
+    <!-- [INPUT Fader] -->
+    <div id="col-input">
+      <div class="juce-label">INPUT</div>
+      <div class="juce-fader-container">
+        <div class="juce-fader-track-wrap" id="track-input">
+          <div class="juce-fader-groove"></div>
+          <div class="juce-fader-thumb" id="thumb-input" style="background-color: rgb(59, 130, 246);"></div>
+        </div>
+        <input class="juce-textbox" id="text-input" readonly value="0.0 dB" />
+      </div>
+    </div>
+
+    <!-- [TARGET Fader] -->
+    <div id="col-target">
+      <div class="juce-label">TARGET</div>
+      <div class="juce-fader-container">
+        <div class="juce-fader-track-wrap" id="track-target">
+          <div class="juce-fader-groove"></div>
+          <div class="juce-fader-thumb" id="thumb-target" style="background-color: rgb(6, 182, 212);"></div>
+        </div>
+        <input class="juce-textbox" id="text-target" readonly value="-12.0 dB" />
+      </div>
+    </div>
+
+    <!-- [RANGE Knob] -->
+    <div id="col-range">
+      <div class="juce-label">RANGE (±dB)</div>
+      <div class="juce-knob-container">
+        <div class="juce-knob-interactive" id="knob-range">
+          <svg viewBox="0 0 100 100">
+            <!-- JUCE Rotary Slider track arc -->
+            <circle cx="50" cy="50" r="38" fill="none" stroke="rgb(30, 41, 59)" stroke-width="7" stroke-dasharray="190" stroke-dashoffset="-45" stroke-linecap="round"/>
+            <!-- Value arc (Amber: 0xf5, 0x9e, 0x0b) -->
+            <circle id="arc-range" cx="50" cy="50" r="38" fill="none" stroke="rgb(245, 158, 11)" stroke-width="7" stroke-dasharray="190" stroke-dashoffset="140" stroke-linecap="round"/>
+            <!-- Rotary thumb / knob body -->
+            <circle cx="50" cy="50" r="28" fill="rgb(24, 28, 38)" stroke="rgb(45, 55, 72)" stroke-width="1.5"/>
+            <line id="needle-range" x1="50" y1="50" x2="50" y2="24" stroke="white" stroke-width="3" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <input class="juce-textbox" id="text-range" readonly value="6.0 dB" />
+      </div>
+    </div>
+
+    <!-- [SPEED Knob] -->
+    <div id="col-speed">
+      <div class="juce-label">SPEED</div>
+      <div class="juce-knob-container">
+        <div class="juce-knob-interactive" id="knob-speed">
+          <svg viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="38" fill="none" stroke="rgb(30, 41, 59)" stroke-width="7" stroke-dasharray="190" stroke-dashoffset="-45" stroke-linecap="round"/>
+            <!-- Value arc (Emerald: 0x10, 0xb9, 0x81) -->
+            <circle id="arc-speed" cx="50" cy="50" r="38" fill="none" stroke="rgb(16, 185, 129)" stroke-width="7" stroke-dasharray="190" stroke-dashoffset="95" stroke-linecap="round"/>
+            <circle cx="50" cy="50" r="28" fill="rgb(24, 28, 38)" stroke="rgb(45, 55, 72)" stroke-width="1.5"/>
+            <line id="needle-speed" x1="50" y1="50" x2="50" y2="24" stroke="white" stroke-width="3" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <input class="juce-textbox" id="text-speed" readonly value="50.0 %" />
+      </div>
+      <div class="attack-release-badge" id="badge-attack-release" style="position: absolute; bottom: 0; left: 0; right: 0;">Att: 35 ms | Rel: 190 ms</div>
+    </div>
+
+    <!-- [MODES: Detector, Timing, BPM Speed] -->
+    <div id="col-mode">
+      <div class="mode-sub-group">
+        <div class="mode-sub-label">DETECTOR</div>
+        <select class="juce-combobox mode-sub-box" id="box-detector">
+          <option value="0" selected>RMS</option>
+          <option value="1">Peak</option>
+        </select>
+      </div>
+      <div class="mode-sub-group">
+        <div class="mode-sub-label">TIMING</div>
+        <select class="juce-combobox mode-sub-box" id="box-timing">
+          <option value="0" selected>Free (ms)</option>
+          <option value="1">Sync (BPM)</option>
+        </select>
+      </div>
+      <div class="mode-sub-group">
+        <div class="mode-sub-label" id="label-sync-speed" style="color: rgb(71, 85, 105);">BPM SPEED</div>
+        <select class="juce-combobox mode-sub-box" id="box-sync-speed" disabled>
+          <option value="0">Fast</option>
+          <option value="1" selected>Mid</option>
+          <option value="2">Slow</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- [OUTPUT Fader] -->
+    <div id="col-output">
+      <div class="juce-label">OUTPUT</div>
+      <div class="juce-fader-container">
+        <div class="juce-fader-track-wrap" id="track-output">
+          <div class="juce-fader-groove"></div>
+          <div class="juce-fader-thumb" id="thumb-output" style="background-color: rgb(168, 85, 247);"></div>
+        </div>
+        <input class="juce-textbox" id="text-output" readonly value="0.0 dB" />
+      </div>
+    </div>
+  </div>
+
+  <div class="guide-text">
+    💡 C++ソースコード（<code>PluginEditor.cpp</code> &amp; <code>PluginProcessor.cpp</code>）内の描画関数（<code>WaveformVisualizerComponent::paint</code> / <code>SlimMeterComponent::paint</code>）および各コンポーネントのピクセル座標・比率・色設定と1対1で完全一致させています。
+  </div>
+
+  <script>
+    // --- パラメータ状態 (JUCE APVTS の初期値と同一) ---
+    const params = {
+      inputGain: 0.0,       // -18.0 ~ +18.0 dB (default: 0.0)
+      targetLevel: -12.0,   // -36.0 ~ 0.0 dB (default: -12.0)
+      range: 6.0,           // 0.0 ~ 24.0 dB (step 0.5, default: 6.0)
+      speed: 50.0,          // 0.0 ~ 100.0 % (default: 50.0)
+      outputGain: 0.0,      // -18.0 ~ +18.0 dB (default: 0.0)
+      lookahead: true,
+      breathFilter: true,
+      sibilanceFilter: true,
+      guiEnable: true,
+      detectorMode: 0,      // 0: RMS, 1: Peak
+      timingMode: 0,        // 0: Free, 1: Sync
+      syncSpeed: 1,         // 0: Fast, 1: Mid, 2: Slow
+      meterMode: 0          // 0: Peak, 1: RMS, 2: VU
+    };
+
+    const hostBpm = 120.0;
+
+    // --- Waveform Visualizer (400 history points) ---
+    const maxHistoryPoints = 400;
+    const history = [];
+    for (let i = 0; i < maxHistoryPoints; i++) {
+      history.push({ inputRms: 0.0, outputRms: 0.0, gainChangeDb: 0.0 });
+    }
+    let writeIndex = 0;
+    let bufferWrapped = false;
+
+    // 疑似ボーカルシミュレーション用
+    let simTime = 0;
+    let smoothedGainDb = 0;
+
+    function pushSimulatedAudioData() {
+      if (!params.guiEnable) return;
+
+      // 60Hzタイマーごとに複数のポイント（約5点）を生成して流し込む
+      for (let p = 0; p < 4; p++) {
+        simTime += 0.035;
+        // 人間の歌声のような抑揚・休符・ビブラート
+        const rawVoc = Math.sin(simTime * 0.8) * 11 + Math.sin(simTime * 2.1) * 5 + (Math.sin(simTime * 14) * 1.5);
+        const pauseGate = Math.sin(simTime * 0.25) > -0.6 ? 1.0 : 0.05; // たまにブレス/休符
+        
+        let inDb = (params.targetLevel + rawVoc) * pauseGate + (pauseGate < 0.5 ? -50 : 0);
+        inDb = Math.max(-50, Math.min(0, inDb + params.inputGain));
+
+        // ゲインライディング計算 (AutoLevelerDSP)
+        const targetDiff = params.targetLevel - inDb;
+        const clampedTargetDiff = Math.max(-params.range, Math.min(params.range, targetDiff));
+
+        // Speed値に応じたスムージング
+        const alpha = 0.03 + (params.speed / 100) * 0.15;
+        smoothedGainDb += (clampedTargetDiff - smoothedGainDb) * alpha;
+
+        const outDb = Math.max(-50, Math.min(0, inDb + smoothedGainDb + params.outputGain));
+
+        const inLinear = Math.pow(10, inDb / 20);
+        const outLinear = Math.pow(10, outDb / 20);
+
+        history[writeIndex] = {
+          inputRms: inLinear,
+          outputRms: outLinear,
+          gainChangeDb: smoothedGainDb
+        };
+        writeIndex = (writeIndex + 1) % maxHistoryPoints;
+        if (writeIndex === 0) bufferWrapped = true;
+      }
+    }
+
+    // --- WaveformVisualizerComponent::paint 実装の完全再現 ---
+    const waveCanvas = document.getElementById('waveform-component');
+    const waveCtx = waveCanvas.getContext('2d');
+
+    function paintWaveform() {
+      const g = waveCtx;
+      const w = waveCanvas.width;
+      const h = waveCanvas.height;
+
+      // 1. 背景描画 (0x12, 0x14, 0x1c -> 0x18, 0x1b, 0x24)
+      const grad = g.createLinearGradient(0, 0, 0, h);
+      grad.addColorStop(0, '#12141c');
+      grad.addColorStop(1, '#181b24');
+      g.fillStyle = grad;
+      g.fillRect(0, 0, w, h);
+
+      // 境界枠線 (0x28, 0x2e, 0x3d)
+      g.strokeStyle = '#282e3d';
+      g.lineWidth = 1;
+      g.strokeRect(0.5, 0.5, w - 1, h - 1);
+
+      if (!params.guiEnable) {
+        g.fillStyle = '#64748b';
+        g.font = '15px sans-serif';
+        g.textAlign = 'center';
+        g.fillText("DISPLAY PAUSED (CPU Saving Mode)", w / 2, h / 2);
+        g.font = '12px sans-serif';
+        g.fillText("Turn on 'GUI Display' to view real-time analysis.", w / 2, h / 2 + 24);
+        return;
+      }
+
+      const top = 15.0;
+      const bottom = h - 15.0;
+      const height = bottom - top;
+      const width = w - 52.0; // dBラベル用余白 52px
+
+      // 2. dBグリッド目盛り
+      const gainMinDb = -24.0;
+      const gainMaxDb = 18.0;
+      const dbToY = (db) => {
+        const norm = (db - gainMinDb) / (gainMaxDb - gainMinDb);
+        return bottom - (norm * height);
+      };
+
+      const gridDbs = [12.0, 0.0, -6.0, -12.0, -24.0];
+      g.font = '11px sans-serif';
+      gridDbs.forEach(db => {
+        const y = Math.round(dbToY(db));
+        g.strokeStyle = (Math.abs(db) < 0.01) ? 'rgba(75, 85, 99, 0.75)' : 'rgba(35, 41, 54, 0.6)';
+        g.beginPath();
+        g.moveTo(10, y + 0.5);
+        g.lineTo(width, y + 0.5);
+        g.stroke();
+
+        g.fillStyle = '#94a3b8';
+        g.textAlign = 'left';
+        const label = (db > 0 ? '+' : '') + Math.round(db) + ' dB';
+        g.fillText(label, width + 5, y + 4);
+      });
+
+      // 3. RMSレベルマッピング (-42 dB 〜 0 dB)
+      const rmsToY = (rms) => {
+        if (rms < 0.0005) return bottom;
+        const db = Math.max(-60, 20 * Math.log10(rms));
+        const norm = Math.max(0, Math.min(1, (db + 42.0) / 42.0));
+        return bottom - (norm * height * 0.94);
+      };
+
+      // 4. レンジ幅（Range）およびターゲットレベルの視覚化
+      const currentTargetDb = params.targetLevel;
+      const currentRangeDb = params.range;
+      const rangeTopDb = Math.max(-42.0, Math.min(0.0, currentTargetDb + currentRangeDb));
+      const rangeBottomDb = Math.max(-42.0, Math.min(0.0, currentTargetDb - currentRangeDb));
+
+      const rangeTopY = rmsToY(Math.pow(10, rangeTopDb / 20));
+      const rangeBottomY = rmsToY(Math.pow(10, rangeBottomDb / 20));
+      const targetY = rmsToY(Math.pow(10, currentTargetDb / 20));
+
+      // 薄いレンジ帯域のハイライト (0xf5, 0x9e, 0x0b, 0.08 alpha)
+      const bandHeight = Math.max(2.0, rangeBottomY - rangeTopY);
+      g.fillStyle = 'rgba(245, 158, 11, 0.08)';
+      g.fillRect(1.0, rangeTopY, width - 1.0, bandHeight);
+
+      // レンジ境界の破線 (4px dash, 4px space)
+      g.strokeStyle = 'rgba(245, 158, 11, 0.35)';
+      g.lineWidth = 1;
+      g.setLineDash([4, 4]);
+      g.beginPath();
+      g.moveTo(0, rangeTopY); g.lineTo(width, rangeTopY);
+      g.moveTo(0, rangeBottomY); g.lineTo(width, rangeBottomY);
+      g.stroke();
+      g.setLineDash([]);
+
+      // ターゲットレベルの基準ライン（シアン: 0x06, 0xb6, 0xd4, 0.75 alpha）
+      g.strokeStyle = 'rgba(6, 182, 212, 0.75)';
+      g.lineWidth = 1.5;
+      g.beginPath();
+      g.moveTo(0, targetY);
+      g.lineTo(width, targetY);
+      g.stroke();
+
+      // ターゲットラベル
+      g.font = 'bold 10px sans-serif';
+      g.fillStyle = 'rgba(6, 182, 212, 0.9)';
+      g.textAlign = 'right';
+      g.fillText('TARGET ' + Math.round(currentTargetDb) + 'dB', width - 5, targetY - 4);
+
+      // 5. 波形データの巡回描画
+      const availablePoints = bufferWrapped ? maxHistoryPoints : writeIndex;
+      if (availablePoints >= 2) {
+        const xStep = width / (maxHistoryPoints - 1);
+
+        // 入力波形
+        g.beginPath();
+        g.moveTo(0, bottom);
+        for (let i = 0; i < maxHistoryPoints; i++) {
+          const x = i * xStep;
+          let sampleIdx = bufferWrapped ? ((writeIndex + i) % maxHistoryPoints) : (i - (maxHistoryPoints - writeIndex));
+          if (sampleIdx < 0) continue;
+          const inY = rmsToY(history[sampleIdx].inputRms);
+          g.lineTo(x, inY);
+        }
+        g.lineTo(width, bottom);
+        g.closePath();
+        g.fillStyle = 'rgba(59, 130, 246, 0.32)'; // スレートブルー
+        g.fill();
+
+        // 出力波形
+        g.beginPath();
+        g.moveTo(0, bottom);
+        for (let i = 0; i < maxHistoryPoints; i++) {
+          const x = i * xStep;
+          let sampleIdx = bufferWrapped ? ((writeIndex + i) % maxHistoryPoints) : (i - (maxHistoryPoints - writeIndex));
+          if (sampleIdx < 0) continue;
+          const outY = rmsToY(history[sampleIdx].outputRms);
+          g.lineTo(x, outY);
+        }
+        g.lineTo(width, bottom);
+        g.closePath();
+        g.fillStyle = 'rgba(6, 182, 212, 0.50)'; // ネオンシアン
+        g.fill();
+
+        // 出力波形ストローク
+        g.beginPath();
+        let firstOut = true;
+        for (let i = 0; i < maxHistoryPoints; i++) {
+          const x = i * xStep;
+          let sampleIdx = bufferWrapped ? ((writeIndex + i) % maxHistoryPoints) : (i - (maxHistoryPoints - writeIndex));
+          if (sampleIdx < 0) continue;
+          const outY = rmsToY(history[sampleIdx].outputRms);
+          if (firstOut) { g.moveTo(x, outY); firstOut = false; }
+          else { g.lineTo(x, outY); }
+        }
+        g.strokeStyle = 'rgba(34, 211, 238, 0.85)';
+        g.lineWidth = 1.5;
+        g.stroke();
+
+        // ゲイン変化の軌跡ライン (アンバー: 0xf5, 0x9e, 0x0b)
+        g.beginPath();
+        let firstGain = true;
+        for (let i = 0; i < maxHistoryPoints; i++) {
+          const x = i * xStep;
+          let sampleIdx = bufferWrapped ? ((writeIndex + i) % maxHistoryPoints) : (i - (maxHistoryPoints - writeIndex));
+          if (sampleIdx < 0) continue;
+          const gainY = Math.max(top, Math.min(bottom, dbToY(history[sampleIdx].gainChangeDb)));
+          if (firstGain) { g.moveTo(x, gainY); firstGain = false; }
+          else { g.lineTo(x, gainY); }
+        }
+        g.strokeStyle = 'rgb(245, 158, 11)';
+        g.lineWidth = 2.6;
+        g.stroke();
+      }
+
+      // 6. 凡例 (HUD Legend)
+      g.font = '11px sans-serif';
+      g.textAlign = 'left';
+      const legendY = 7.0;
+
+      g.fillStyle = '#3b82f6';
+      g.fillRect(12, legendY + 3, 8, 8);
+      g.fillStyle = '#94a3b8';
+      g.fillText("Input RMS", 24, legendY + 11);
+
+      g.fillStyle = '#06b6d4';
+      g.fillRect(98, legendY + 3, 8, 8);
+      g.fillStyle = '#94a3b8';
+      g.fillText("Output RMS", 110, legendY + 11);
+
+      g.fillStyle = '#f59e0b';
+      g.fillRect(190, legendY + 3, 8, 8);
+      g.fillStyle = '#94a3b8';
+      g.fillText("Gain Ride", 202, legendY + 11);
+
+      g.strokeStyle = 'rgba(245, 158, 11, 0.4)';
+      g.lineWidth = 1;
+      g.strokeRect(276.5, legendY + 3.5, 14, 8);
+      g.fillStyle = '#94a3b8';
+      g.fillText("Range (±" + currentRangeDb.toFixed(1) + "dB)", 296, legendY + 11);
+    }
+
+    // --- SlimMeterComponent::paint 実装の完全再現 ---
+    const meterCanvas = document.getElementById('slim-meter-component');
+    const meterCtx = meterCanvas.getContext('2d');
+
+    let inputLevelDb = -60.0;
+    let outputLevelDb = -60.0;
+    let inputPeakDb = -60.0;
+    let outputPeakDb = -60.0;
+    let inHoldTimer = 0;
+    let outHoldTimer = 0;
+
+    function paintSlimMeter() {
+      const g = meterCtx;
+      const w = meterCanvas.width;
+      const h = meterCanvas.height;
+
+      // 最新の波形値からメーター値をシミュレート
+      const latest = history[(writeIndex - 1 + maxHistoryPoints) % maxHistoryPoints];
+      const curInDb = latest.inputRms > 0.0001 ? 20 * Math.log10(latest.inputRms) : -60.0;
+      const curOutDb = latest.outputRms > 0.0001 ? 20 * Math.log10(latest.outputRms) : -60.0;
+
+      if (params.meterMode === 0) { // Peak
+        const decayRate = 1.6;
+        inputLevelDb = Math.max(curInDb, inputLevelDb - decayRate);
+        outputLevelDb = Math.max(curOutDb, outputLevelDb - decayRate);
+
+        if (curInDb >= inputPeakDb) { inputPeakDb = curInDb; inHoldTimer = 45; }
+        else if (inHoldTimer > 0) inHoldTimer--;
+        else inputPeakDb = Math.max(inputLevelDb, inputPeakDb - 0.7);
+
+        if (curOutDb >= outputPeakDb) { outputPeakDb = curOutDb; outHoldTimer = 45; }
+        else if (outHoldTimer > 0) outHoldTimer--;
+        else outputPeakDb = Math.max(outputLevelDb, outputPeakDb - 0.7);
+      } else { // RMS or VU
+        const decayRate = params.meterMode === 1 ? 1.2 : 0.9;
+        inputLevelDb = Math.max(curInDb, inputLevelDb - decayRate);
+        outputLevelDb = Math.max(curOutDb, outputLevelDb - decayRate);
+        inputPeakDb = inputLevelDb;
+        outputPeakDb = outputLevelDb;
+      }
+
+      // 背景 (0x12, 0x14, 0x1c)
+      g.fillStyle = '#12141c';
+      g.fillRect(0, 0, w, h);
+      g.strokeStyle = '#282e3d';
+      g.strokeRect(0.5, 0.5, w - 1, h - 1);
+
+      if (!params.guiEnable) return;
+
+      const meterTop = 18.0;
+      const meterBottom = h - 14.0;
+      const meterHeight = meterBottom - meterTop;
+
+      const barWidth = 9.0;
+      const inBarX = 5.0;
+      const outBarX = 19.0;
+
+      // トラック背景 (0x1e, 0x22, 0x2e)
+      g.fillStyle = '#1e222e';
+      g.fillRect(inBarX, meterTop, barWidth, meterHeight);
+      g.fillRect(outBarX, meterTop, barWidth, meterHeight);
+
+      if (params.meterMode === 2) {
+        // VU モード (0 VU = -18 dBFS, -20 VU ~ +3 VU)
+        const vuToY = (dbFs) => {
+          const vu = dbFs + 18.0;
+          const norm = Math.max(0, Math.min(1, (vu + 20.0) / 23.0));
+          return meterBottom - (norm * meterHeight);
+        };
+        const zeroVuY = vuToY(-18.0);
+
+        // IN
+        const inY = vuToY(inputLevelDb);
+        if (inY < meterBottom) {
+          const subZeroH = meterBottom - Math.max(zeroVuY, inY);
+          g.fillStyle = '#fbbf24'; // ウォームアンバー
+          g.fillRect(inBarX, Math.max(zeroVuY, inY), barWidth, subZeroH);
+          if (inY < zeroVuY) {
+            g.fillStyle = '#ef4444'; // 超過レッド
+            g.fillRect(inBarX, inY, barWidth, zeroVuY - inY);
+          }
+        }
+        // OUT
+        const outY = vuToY(outputLevelDb);
+        if (outY < meterBottom) {
+          const subZeroH = meterBottom - Math.max(zeroVuY, outY);
+          g.fillStyle = '#fbbf24';
+          g.fillRect(outBarX, Math.max(zeroVuY, outY), barWidth, subZeroH);
+          if (outY < zeroVuY) {
+            g.fillStyle = '#ef4444';
+            g.fillRect(outBarX, outY, barWidth, zeroVuY - outY);
+          }
+        }
+
+        // 0 VU 線
+        g.strokeStyle = '#ef4444';
+        g.beginPath();
+        g.moveTo(inBarX, Math.round(zeroVuY) + 0.5);
+        g.lineTo(outBarX + barWidth, Math.round(zeroVuY) + 0.5);
+        g.stroke();
+
+        // 目盛り
+        g.font = '8px sans-serif';
+        g.textAlign = 'left';
+        [3.0, 0.0, -5.0, -10.0, -20.0].forEach(v => {
+          const y = vuToY(v - 18.0);
+          g.fillStyle = (v >= 0.0) ? '#ef4444' : '#94a3b8';
+          g.fillText((v > 0 ? '+' : '') + Math.round(v), outBarX + barWidth + 2, y + 3);
+        });
+      } else {
+        // Peak / RMS モード (-48 dBFS ~ 0 dBFS)
+        const dbToY = (db) => {
+          const norm = Math.max(0, Math.min(1, (db + 48.0) / 54.0));
+          return meterBottom - (norm * meterHeight);
+        };
+
+        const inY = dbToY(inputLevelDb);
+        if (inY < meterBottom) {
+          const gradIn = g.createLinearGradient(0, meterTop, 0, meterBottom);
+          if (params.meterMode === 0) {
+            gradIn.addColorStop(0, '#60a5fa');
+            gradIn.addColorStop(1, '#2563eb');
+          } else {
+            gradIn.addColorStop(0, '#38bdf8');
+            gradIn.addColorStop(1, '#0284c7');
+          }
+          g.fillStyle = gradIn;
+          g.fillRect(inBarX, inY, barWidth, meterBottom - inY);
+        }
+
+        const outY = dbToY(outputLevelDb);
+        if (outY < meterBottom) {
+          const gradOut = g.createLinearGradient(0, meterTop, 0, meterBottom);
+          if (params.meterMode === 0) {
+            gradOut.addColorStop(0, '#22d3ee');
+            gradOut.addColorStop(1, '#0891b2');
+          } else {
+            gradOut.addColorStop(0, '#2dd4bf');
+            gradOut.addColorStop(1, '#0d9488');
+          }
+          g.fillStyle = gradOut;
+          g.fillRect(outBarX, outY, barWidth, meterBottom - outY);
+        }
+
+        // ピークホールド (Peakモード)
+        if (params.meterMode === 0) {
+          const inPeakY = dbToY(inputPeakDb);
+          if (inPeakY < meterBottom) {
+            g.strokeStyle = '#93c5fd';
+            g.beginPath();
+            g.moveTo(inBarX, Math.round(inPeakY) + 0.5);
+            g.lineTo(inBarX + barWidth, Math.round(inPeakY) + 0.5);
+            g.stroke();
+          }
+          const outPeakY = dbToY(outputPeakDb);
+          if (outPeakY < meterBottom) {
+            g.strokeStyle = '#a5f3fc';
+            g.beginPath();
+            g.moveTo(outBarX, Math.round(outPeakY) + 0.5);
+            g.lineTo(outBarX + barWidth, Math.round(outPeakY) + 0.5);
+            g.stroke();
+          }
+        }
+
+        // 0dB 目盛り線
+        const zeroY = dbToY(0.0);
+        g.strokeStyle = 'rgba(239, 68, 68, 0.7)';
+        g.beginPath();
+        g.moveTo(inBarX, Math.round(zeroY) + 0.5);
+        g.lineTo(outBarX + barWidth, Math.round(zeroY) + 0.5);
+        g.stroke();
+
+        // 目盛り
+        g.font = '8px sans-serif';
+        g.textAlign = 'left';
+        g.fillStyle = '#64748b';
+        [0.0, -12.0, -24.0, -36.0].forEach(m => {
+          const y = dbToY(m);
+          g.fillText(Math.round(m), outBarX + barWidth + 2, y + 3);
+        });
+      }
+
+      // ラベル (IN / OUT)
+      g.font = 'bold 9px sans-serif';
+      g.fillStyle = '#94a3b8';
+      g.textAlign = 'center';
+      g.fillText("IN", inBarX + barWidth / 2, 12);
+      g.fillText("OUT", outBarX + barWidth / 2, 12);
+    }
+
+    // --- Timing Info 計算 (calculateTiming と同一) ---
+    function updateAttackReleaseLabel() {
+      const badge = document.getElementById('badge-attack-release');
+      const isSync = (params.timingMode === 1);
+      const quarterNoteMs = (60.0 / hostBpm) * 1000.0;
+
+      if (!isSync) {
+        const speedNorm = Math.max(0.0, Math.min(1.0, params.speed * 0.01));
+        const attackMs = Math.round(150.0 * Math.pow(8.0 / 150.0, speedNorm));
+        const releaseMs = Math.round(800.0 * Math.pow(45.0 / 800.0, speedNorm));
+        badge.textContent = `Att: ${attackMs} ms | Rel: ${releaseMs} ms`;
+      } else {
+        let attLabel = "", relLabel = "", modeName = "Mid";
+        if (params.syncSpeed === 0) {
+          modeName = "Fast";
+          const att = Math.round(quarterNoteMs * (1.0 / 16.0));
+          const rel = Math.round(quarterNoteMs * (1.0 / 4.0));
+          attLabel = `1/64 (${att}ms)`;
+          relLabel = `1/16 (${rel}ms)`;
+        } else if (params.syncSpeed === 2) {
+          modeName = "Slow";
+          const att = Math.round(quarterNoteMs * (1.0 / 4.0));
+          const rel = Math.round(quarterNoteMs * 1.0);
+          attLabel = `1/16 (${att}ms)`;
+          relLabel = `1/4 (${rel}ms)`;
+        } else {
+          modeName = "Mid";
+          const att = Math.round(quarterNoteMs * (1.0 / 8.0));
+          const rel = Math.round(quarterNoteMs * 0.5);
+          attLabel = `1/32 (${att}ms)`;
+          relLabel = `1/8 (${rel}ms)`;
+        }
+        badge.textContent = `${modeName}: Att ${attLabel} | Rel ${relLabel} @${Math.round(hostBpm)}BPM`;
+      }
+    }
+
+    // --- Fader Controller ---
+    function bindFader(trackId, thumbId, textId, min, max, initial, onValue) {
+      const track = document.getElementById(trackId);
+      const thumb = document.getElementById(thumbId);
+      const text = document.getElementById(textId);
+
+      function setVal(v, notify = true) {
+        v = Math.max(min, Math.min(max, v));
+        const norm = (v - min) / (max - min);
+        // LinearVertical: norm 0 (bottom) -> norm 1 (top)
+        thumb.style.bottom = `${norm * 100}%`;
+        text.value = `${v > 0 ? '+' : ''}${v.toFixed(1)} dB`;
+        if (notify) onValue(v);
+      }
+
+      setVal(initial, false);
+
+      let dragging = false;
+      function handleMove(e) {
+        if (!dragging) return;
+        const rect = track.getBoundingClientRect();
+        const norm = 1.0 - ((e.clientY - rect.top) / rect.height);
+        const clamped = Math.max(0.0, Math.min(1.0, norm));
+        setVal(min + clamped * (max - min));
+      }
+
+      track.addEventListener('pointerdown', (e) => {
+        dragging = true;
+        track.setPointerCapture(e.pointerId);
+        handleMove(e);
+      });
+      track.addEventListener('pointermove', handleMove);
+      track.addEventListener('pointerup', (e) => {
+        dragging = false;
+        try { track.releasePointerCapture(e.pointerId); } catch(err){}
+      });
+    }
+
+    bindFader('track-input', 'thumb-input', 'text-input', -18.0, 18.0, params.inputGain, v => params.inputGain = v);
+    bindFader('track-target', 'thumb-target', 'text-target', -36.0, 0.0, params.targetLevel, v => params.targetLevel = v);
+    bindFader('track-output', 'thumb-output', 'text-output', -18.0, 18.0, params.outputGain, v => params.outputGain = v);
+
+    // --- Knob Controller ---
+    function bindKnob(knobId, arcId, needleId, textId, min, max, initial, step, isPercent, onValue) {
+      const knob = document.getElementById(knobId);
+      const arc = document.getElementById(arcId);
+      const needle = document.getElementById(needleId);
+      const text = document.getElementById(textId);
+
+      let curVal = initial;
+
+      function setVal(v, notify = true) {
+        v = Math.max(min, Math.min(max, v));
+        if (step > 0) v = Math.round(v / step) * step;
+        curVal = v;
+
+        const norm = (v - min) / (max - min);
+        // Rotary arc
+        const totalLen = 190;
+        arc.style.strokeDashoffset = `${totalLen - (norm * totalLen * 0.74)}`;
+
+        // Needle angle: -135deg to +135deg
+        const deg = -135 + norm * 270;
+        const rad = (deg - 90) * (Math.PI / 180);
+        needle.setAttribute('x2', 50 + 26 * Math.cos(rad));
+        needle.setAttribute('y2', 50 + 26 * Math.sin(rad));
+
+        text.value = isPercent ? `${v.toFixed(1)} %` : `${v.toFixed(1)} dB`;
+        if (notify) onValue(v);
+      }
+
+      setVal(initial, false);
+
+      let dragging = false;
+      let startY = 0;
+      let startVal = initial;
+
+      knob.addEventListener('pointerdown', (e) => {
+        dragging = true;
+        startY = e.clientY;
+        startVal = curVal;
+        knob.setPointerCapture(e.pointerId);
+      });
+      knob.addEventListener('pointermove', (e) => {
+        if (!dragging) return;
+        const delta = startY - e.clientY;
+        const range = max - min;
+        setVal(startVal + (delta / 120.0) * range);
+      });
+      knob.addEventListener('pointerup', (e) => {
+        dragging = false;
+        try { knob.releasePointerCapture(e.pointerId); } catch(err){}
+      });
+    }
+
+    bindKnob('knob-range', 'arc-range', 'needle-range', 'text-range', 0.0, 24.0, params.range, 0.5, false, v => params.range = v);
+    bindKnob('knob-speed', 'arc-speed', 'needle-speed', 'text-speed', 0.0, 100.0, params.speed, 0.1, true, v => {
+      params.speed = v;
+      updateAttackReleaseLabel();
+    });
+
+    // --- Toggles ---
+    function bindToggle(id, prop) {
+      const el = document.getElementById(id);
+      el.addEventListener('click', () => {
+        params[prop] = !params[prop];
+        el.classList.toggle('active', params[prop]);
+      });
+    }
+    bindToggle('toggle-lookahead', 'lookahead');
+    bindToggle('toggle-breath', 'breathFilter');
+    bindToggle('toggle-sibilance', 'sibilanceFilter');
+    bindToggle('toggle-gui', 'guiEnable');
+
+    // --- Selectors ---
+    const boxTiming = document.getElementById('box-timing');
+    const boxSyncSpeed = document.getElementById('box-sync-speed');
+    const labelSyncSpeed = document.getElementById('label-sync-speed');
+
+    boxTiming.addEventListener('change', (e) => {
+      params.timingMode = parseInt(e.target.value);
+      const isSync = (params.timingMode === 1);
+      boxSyncSpeed.disabled = !isSync;
+      labelSyncSpeed.style.color = isSync ? 'rgb(148, 163, 184)' : 'rgb(71, 85, 105)';
+      updateAttackReleaseLabel();
+    });
+
+    boxSyncSpeed.addEventListener('change', (e) => {
+      params.syncSpeed = parseInt(e.target.value);
+      updateAttackReleaseLabel();
+    });
+
+    document.getElementById('box-detector').addEventListener('change', (e) => {
+      params.detectorMode = parseInt(e.target.value);
+    });
+
+    document.getElementById('meter-mode-box').addEventListener('change', (e) => {
+      params.meterMode = parseInt(e.target.value);
+    });
+
+    updateAttackReleaseLabel();
+
+    // --- 60Hz 描画ループ (JUCE startTimerHz(60) と同一) ---
+    function mainLoop() {
+      pushSimulatedAudioData();
+      paintWaveform();
+      paintSlimMeter();
+      requestAnimationFrame(mainLoop);
+    }
+    mainLoop();
+  </script>
+</body>
+</html>
