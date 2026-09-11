@@ -2,7 +2,7 @@
 #include "PluginEditor.h"
 
 // ==============================================================================
-// WaveformVisualizerComponent 実装 (Nectar 4 準拠: 中央 0 dB ＆ ±15 dB スケール)
+// WaveformVisualizerComponent 実装 (中央 0 dB ＆ ±15 dB スケール)
 // ==============================================================================
 WaveformVisualizerComponent::WaveformVisualizerComponent()
     : history (static_cast<size_t>(maxHistoryPoints))
@@ -63,7 +63,7 @@ void WaveformVisualizerComponent::resized()
 
 float WaveformVisualizerComponent::getTargetLineY() const
 {
-    // Nectar 4 準拠: 中央が 0 dB（ターゲット基準レベル）
+    // 中央が 0 dB（ターゲット基準レベル）
     const float height = chartBottom - chartTop;
     return chartBottom - (0.5f * height);
 }
@@ -1044,7 +1044,7 @@ void AutoLevelerAudioProcessorEditor::timerCallback()
         attackReleaseLabel.setText ("Att " + timing.attackLabel + " | Rel " + timing.releaseLabel, juce::dontSendNotification);
     }
 
-    // 5. TARGET LEVEL フェーダー内部のリアルタイム入力メーター更新 (Nectar 4 方式)
+    // 5. TARGET LEVEL フェーダー内部のリアルタイム入力メーター更新 (トラック内メーター統合型)
     const float inLinear = audioProcessor.getLatestInputRms();
     const float inDb     = inLinear > 0.0001f ? juce::Decibels::gainToDecibels (inLinear, -60.0f) : -60.0f;
     targetLevelSlider.setInputMeterLevel (inDb);
@@ -1189,7 +1189,7 @@ void AutoLevelerAudioProcessorEditor::resized()
     ctrlPanel.removeFromBottom (12); // フッター上の調和マージン (残り高さ 478px)
 
     // 上部コントロールエリア (左右2分割)
-    // 右サブ列: TARGET LEVEL フェーダー (幅70px: Nectar 4 方式メーター統合)
+    // 右サブ列: TARGET LEVEL フェーダー (幅70px: トラック内メーター統合型)
     const int targetColW = 70;
     auto targetCol = ctrlPanel.removeFromRight (targetColW);
     ctrlPanel.removeFromRight (10); // 列間ギャップ

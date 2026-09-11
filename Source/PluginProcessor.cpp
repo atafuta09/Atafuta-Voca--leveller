@@ -26,8 +26,8 @@ AutoLevelerAudioProcessor::AutoLevelerAudioProcessor()
     // 8つの実践的ファクトリープリセットの初期化
     // 1. Default (標準)
     presets.push_back ({ "Default", 0.0f, -12.0f, 6.0f, 50.0f, 0.0f, true, false, false, 0, 0, 1 });
-    // 2. Vocaloid (ユーザー様指定)
-    presets.push_back ({ "Vocaloid", 0.0f, -14.0f, 6.0f, 75.0f, 0.0f, true, true, true, 0, 0, 1 });
+    // 2. Synth Vocal (合成音声・打ち込みボーカル特化)
+    presets.push_back ({ "Synth Vocal", 0.0f, -14.0f, 6.0f, 75.0f, 0.0f, true, true, true, 0, 0, 1 });
     // 3. Gentle Vocal Ride (自然な音量均一化)
     presets.push_back ({ "Gentle Vocal Ride", 0.0f, -14.0f, 4.0f, 35.0f, 0.0f, true, true, false, 0, 0, 1 });
     // 4. Aggressive Leveler (ロック・激しいボーカル向け)

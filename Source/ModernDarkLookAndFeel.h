@@ -216,7 +216,7 @@ public:
 
         if (isTargetSlider)
         {
-            // ================= TARGET LEVEL (Nectar 4 方式: トラック内メーター統合) =================
+            // ================= TARGET LEVEL (トラック内メーター統合型) =================
             const float trackW = 20.0f;
             const float trackX = bounds.getCentreX() - (trackW * 0.5f);
             const float trackY = bounds.getY() + 4.0f;

@@ -83,7 +83,7 @@ private:
 
 // ==============================================================================
 /**
- * Nectar 4 スタイルの TARGET LEVEL 縦長フェーダー
+ * トラック内メーター統合型 TARGET LEVEL 縦長フェーダー
  * トラック溝内部にリアルタイムの Input レベル (-36 dBFS ~ 0 dBFS) が
  * エレクトリックブルー〜白熱コアのバーとして直接光り上がるカスタムスライダー
  */
@@ -180,7 +180,7 @@ private:
     juce::Label  outputGainLabel;
     juce::Label  outputGainValueLabel;
 
-    // TARGET LEVEL 縦長フェーダー (Nectar 4 方式: トラック内メーター統合)
+    // TARGET LEVEL 縦長フェーダー (トラック内メーター統合型)
     TargetLevelFaderSlider targetLevelSlider;
     juce::Label            targetLevelLabel;
     juce::Label            targetLevelValueLabel;
